@@ -16,10 +16,10 @@ const startTime = Date.now()
 /* =============== BOT ================= */
 
 const bot = mineflayer.createBot({
-  host: aeroxolserver.aternos.me,
-  port: 19266,
+  host: SERVER_IP,
+  port: SERVER_PORT,
   username: BOT_NAME,
-  version: 1.21.1
+  version: MC_VERSION
 })
 
 bot.once('spawn', () => {
