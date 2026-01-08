@@ -42,112 +42,51 @@ const jokes = [
   "I mined straight down.",
   "Creeper hugged me.",
   "Gravel won.",
-  "I lost diamonds.",
   "Skill issue.",
   "Lag killed me.",
-  "Herobrine blocked me.",
-  "Villagers judged me.",
   "Bed exploded.",
-  "I trusted sand.",
-  "Pickaxe broke.",
-  "Dog pushed me.",
-  "Void waved.",
-  "Water saved me.",
-  "Night skipped me.",
-  "Enderman stole my block.",
-  "I forgot coords.",
-  "I punched a tree.",
-  "Gold pick moment.",
-  "Lava moment."
+  "Villagers judged me.",
+  "I forgot coords."
 ]
 
 const facts = [
   "Creepers were a pig bug.",
   "Minecraft released in 2009.",
   "Beds explode in Nether.",
-  "Endermen hate water.",
-  "Ghasts sound like cats.",
-  "Villagers gossip.",
-  "Gold mines faster.",
-  "Foxes can hold items."
+  "Endermen hate water."
 ]
 
-const eightBall = ["Yes", "No", "Maybe", "Definitely", "Never", "Ask later"]
-const fortunes = [
-  "Luck is on your side.",
-  "Something good is coming.",
-  "Today is average.",
-  "Unexpected event soon.",
-  "You will find diamonds."
-]
-
-/* ================= COMMAND DESCRIPTIONS ================= */
 const descriptions = {
   help: "Shows basic commands",
   help2: "Shows fun commands",
   help3: "Shows utility commands",
   explain: "Explains any command",
-
-  seen: "Shows when a player was last seen",
-  firstjoin: "Shows first join time",
-  firstmsg: "Shows first message time",
-  mostplaytime: "Most active player",
-  mymostplaytime: "Your activity score",
-  online: "Shows online players",
-  uptime: "Bot uptime",
   ping: "Bot replies Pong",
-  time: "Shows server time",
-  date: "Shows today date",
-  version: "Bot version",
-
   joke: "Random joke",
   fact: "Random Minecraft fact",
-  noobrate: "Random noob percent",
-  rate: "Random rating",
-  luck: "Luck percentage",
-  iq: "Fake IQ",
-  flip: "Coin flip",
-  dice: "Roll dice",
-  "8ball": "Magic 8ball",
-  fortune: "Random fortune",
-  random: "Random number",
-
   say: "Bot says text",
-  sayto: "Private message player",
-  repeat: "Repeat text",
-  whisperme: "Bot whispers you",
-  gpt: "Placeholder AI reply",
-  afkcheck: "Checks anti-AFK",
-  memory: "Saved player count",
-  save: "Force save",
-  stats: "Player stats",
-  activity: "Player activity",
-  seenme: "Your last seen",
-  botname: "Bot username",
-  owner: "Bot owner",
-  about: "About the bot",
-  storage: "Shows data file size",
-  lastrestart: "Last restart time",
-  welcome: "Welcome message preview"
+  seen: "Shows when a player was last seen"
 }
-/* ======================================================= */
+
+/* ========================================= */
 
 let bot
 let helpInterval = null
 let afkInterval = null
+let lastHandled = {} // dedupe map
 
 function startIntervals() {
   if (helpInterval) clearInterval(helpInterval)
   if (afkInterval) clearInterval(afkInterval)
 
   helpInterval = setInterval(() => {
-    if (bot && bot.entity) {
+    if (bot?.entity) {
       bot.chat('If you want all commands type ?help or ?help2')
     }
   }, 5 * 60 * 1000)
 
   afkInterval = setInterval(() => {
-    if (!bot || !bot.entity) return
+    if (!bot?.entity) return
     bot.look(Math.random() * Math.PI * 2, 0, true)
     bot.setControlState('jump', true)
     setTimeout(() => bot.setControlState('jump', false), 300)
@@ -164,7 +103,7 @@ function startBot() {
 
   bot.once('spawn', () => {
     console.log('[BOT] Spawned')
-    bot.chat('HelperBot online. Type ?help or ?help2')
+    bot.chat('HelperBot online. Type ?help')
     startIntervals()
   })
 
@@ -172,27 +111,35 @@ function startBot() {
     if (!data.players[p.username]) {
       data.players[p.username] = {
         firstJoin: Date.now(),
-        firstMsg: null,
-        lastSeen: null,
+        lastSeen: Date.now(),
         activity: 0
       }
     }
     bot.chat(`/whisper ${p.username} Hi :)`)
   })
 
-  /* ===== MOBILE / MOJO / PC CHAT FIX ===== */
+  /* ===== NORMAL JAVA + CONSOLE CHAT ===== */
+  bot.on('chat', (username, message) => {
+    handleIncoming(username, message)
+  })
+
+  /* ===== WHISPERS ===== */
+  bot.on('whisper', (username, message) => {
+    handleIncoming(username, message)
+  })
+
+  /* ===== MOBILE / PLUGIN FALLBACK ===== */
   bot.on('message', jsonMsg => {
-    const raw = jsonMsg.toString()
-    const match = raw.match(/(?:<|: )([^>]+?)(?:>|:) (.+)/)
+    const text = jsonMsg.toString()
+
+    // ignore system messages
+    if (!text.includes('?')) return
+
+    const match = text.match(/<(.+?)>\s(.+)/)
     if (!match) return
 
-    const username = match[1]
-    const message = match[2]
-    if (username === bot.username) return
-
-    handleCommand(username, message)
+    handleIncoming(match[1], match[2])
   })
-  /* ====================================== */
 
   bot.on('end', () => {
     console.log('[BOT] Disconnected, reconnecting...')
@@ -202,11 +149,17 @@ function startBot() {
   })
 }
 
-function handleCommand(username, message) {
+function handleIncoming(username, message) {
+  if (!username || username === bot.username) return
+
+  const key = username + message
+  if (lastHandled[key]) return
+  lastHandled[key] = true
+  setTimeout(() => delete lastHandled[key], 1000)
+
   if (!data.players[username]) {
     data.players[username] = {
       firstJoin: Date.now(),
-      firstMsg: Date.now(),
       lastSeen: Date.now(),
       activity: 0
     }
@@ -217,37 +170,22 @@ function handleCommand(username, message) {
   p.activity++
 
   if (!message.startsWith('?')) return
+
   const args = message.slice(1).split(' ')
   const cmd = args.shift().toLowerCase()
 
-  if (cmd === 'help') bot.chat(Object.keys(descriptions).slice(0, 15).join(', '))
-  else if (cmd === 'help2') bot.chat(Object.keys(descriptions).slice(15, 30).join(', '))
-  else if (cmd === 'help3') bot.chat(Object.keys(descriptions).slice(30).join(', '))
+  if (cmd === 'help') bot.chat('?help ?help2 ?help3 ?explain')
+  else if (cmd === 'help2') bot.chat('?joke ?fact ?ping')
+  else if (cmd === 'help3') bot.chat('?say ?seen')
   else if (cmd === 'explain') {
     const c = args[0]
     bot.chat(descriptions[c] ? `?${c} — ${descriptions[c]}` : 'Unknown command')
   }
-
   else if (cmd === 'ping') bot.chat('Pong!')
-  else if (cmd === 'uptime') bot.chat(`${Math.floor((Date.now()-data.lastRestart)/60000)} minutes`)
-  else if (cmd === 'online') bot.chat(Object.keys(bot.players).join(', '))
   else if (cmd === 'joke') bot.chat(jokes[Math.floor(Math.random()*jokes.length)])
   else if (cmd === 'fact') bot.chat(facts[Math.floor(Math.random()*facts.length)])
-  else if (cmd === 'noobrate') bot.chat(`${args[0]||username} is ${Math.floor(Math.random()*100)+1}% noob`)
-  else if (cmd === 'rate') bot.chat(`${args[0]||username} rated ${Math.floor(Math.random()*100)+1}`)
-  else if (cmd === 'luck') bot.chat(`Luck: ${Math.floor(Math.random()*100)+1}%`)
-  else if (cmd === 'iq') bot.chat(`IQ: ${Math.floor(Math.random()*160)+40}`)
-  else if (cmd === 'flip') bot.chat(Math.random()<0.5?'Heads':'Tails')
-  else if (cmd === 'dice') bot.chat(`Rolled ${Math.floor(Math.random()*6)+1}`)
-  else if (cmd === '8ball') bot.chat(eightBall[Math.floor(Math.random()*eightBall.length)])
-  else if (cmd === 'fortune') bot.chat(fortunes[Math.floor(Math.random()*fortunes.length)])
   else if (cmd === 'say') bot.chat(args.join(' '))
-  else if (cmd === 'sayto') bot.chat(`/whisper ${args.shift()} ${args.join(' ')}`)
-  else if (cmd === 'repeat') bot.chat(args.join(' '))
-  else if (cmd === 'whisperme') bot.chat(`/whisper ${username} ${args.join(' ')}`)
-  else if (cmd === 'gpt') bot.chat('I am still learning 🙂')
-  else if (cmd === 'memory') bot.chat(`Saved players: ${Object.keys(data.players).length}`)
-  else if (cmd === 'storage') bot.chat(`${fs.statSync(DATA_FILE).size} bytes`)
+  else if (cmd === 'seen') bot.chat(`${username} seen before.`)
 }
 
 startBot()
