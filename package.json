@@ -1,5 +1,5 @@
 {
-  "name": "mapart-bot",
+  "name": "helperbot",
   "version": "1.0.0",
   "main": "index.js",
   "type": "commonjs",
@@ -7,10 +7,6 @@
     "start": "node index.js"
   },
   "dependencies": {
-    "axios": "^1.6.7",
-    "mineflayer": "^4.17.0",
-    "mineflayer-pathfinder": "^2.4.5",
-    "sharp": "^0.33.2",
-    "vec3": "^0.1.10"
+    "mineflayer": "^4.17.0"
   }
 }
