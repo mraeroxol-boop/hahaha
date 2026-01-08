@@ -3,8 +3,8 @@ const mineflayer = require('mineflayer')
 /* ================= CONFIG ================= */
 
 const BOT_NAME = 'helperbot'
-const SERVER_IP = 'YOUR.SERVER.IP' // CHANGE THIS
-const SERVER_PORT = 25565
+const SERVER_IP = '.aeroxolserver.aternos.me' // CHANGE THIS
+const SERVER_PORT = 19266
 const MC_VERSION = '1.21.1'
 const PREFIX = '?'
 
@@ -16,10 +16,10 @@ const startTime = Date.now()
 /* =============== BOT ================= */
 
 const bot = mineflayer.createBot({
-  host: SERVER_IP,
-  port: SERVER_PORT,
+  host: aeroxolserver.aternos.me,
+  port: 19266,
   username: BOT_NAME,
-  version: MC_VERSION
+  version: 1.21.1
 })
 
 bot.once('spawn', () => {
