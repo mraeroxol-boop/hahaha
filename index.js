@@ -1,152 +1,160 @@
 const mineflayer = require('mineflayer')
-const axios = require('axios')
-const sharp = require('sharp')
-const { Vec3 } = require('vec3')
 
 /* ================= CONFIG ================= */
 
-const BOT_NAME = 'builder'
-const SERVER_IP = 'YOUR.SERVER.IP'   // ← CHANGE THIS
-const SERVER_PORT = 25565             // ← CHANGE IF NEEDED
+const BOT_NAME = 'helperbot'
+const SERVER_IP = 'YOUR.SERVER.IP' // CHANGE THIS
+const SERVER_PORT = 25565
 const MC_VERSION = '1.21.1'
-const MAP_SIZE = 128
+const PREFIX = '?'
 
-/* ============== WOOL PALETTE ============== */
+/* =============== DATA ================= */
 
-const WOOL_PALETTE = [
-  { block: 'white_wool', rgb: [234,236,237] },
-  { block: 'light_gray_wool', rgb: [142,142,134] },
-  { block: 'gray_wool', rgb: [62,68,71] },
-  { block: 'black_wool', rgb: [21,21,26] },
-  { block: 'red_wool', rgb: [161,39,34] },
-  { block: 'orange_wool', rgb: [240,118,19] },
-  { block: 'yellow_wool', rgb: [249,198,39] },
-  { block: 'lime_wool', rgb: [112,185,25] },
-  { block: 'green_wool', rgb: [84,109,27] },
-  { block: 'light_blue_wool', rgb: [58,175,217] },
-  { block: 'blue_wool', rgb: [53,57,157] },
-  { block: 'purple_wool', rgb: [123,47,190] },
-  { block: 'pink_wool', rgb: [237,141,172] },
-  { block: 'brown_wool', rgb: [114,71,40] }
-]
+const lastSeen = {}
+const startTime = Date.now()
 
-/* ============== COLOR MATCHING ============== */
-
-function dist(a, b) {
-  return Math.sqrt(
-    (a[0]-b[0])**2 +
-    (a[1]-b[1])**2 +
-    (a[2]-b[2])**2
-  )
-}
-
-function closestWool(rgb) {
-  let best = WOOL_PALETTE[0]
-  let min = Infinity
-  for (const w of WOOL_PALETTE) {
-    const d = dist(rgb, w.rgb)
-    if (d < min) {
-      min = d
-      best = w
-    }
-  }
-  return best.block
-}
-
-/* ============== IMAGE PROCESSING ============== */
-
-async function imageToPixels(url) {
-  console.log('[INFO] Downloading image:', url)
-
-  const res = await axios.get(url, {
-    responseType: 'arraybuffer',
-    timeout: 20000
-  })
-
-  console.log('[INFO] Image downloaded, bytes:', res.data.length)
-
-  const img = await sharp(res.data)
-    .resize(MAP_SIZE, MAP_SIZE, { fit: 'contain', background: { r: 0, g: 0, b: 0 } })
-    .raw()
-    .toBuffer()
-
-  const pixels = []
-  for (let z = 0; z < MAP_SIZE; z++) {
-    pixels[z] = []
-    for (let x = 0; x < MAP_SIZE; x++) {
-      const i = (z * MAP_SIZE + x) * 3
-      const rgb = [img[i], img[i+1], img[i+2]]
-      pixels[z][x] = closestWool(rgb)
-    }
-  }
-  return pixels
-}
-
-/* ================= BUILD LOGIC ================= */
-
-async function buildMap(bot, pixels) {
-  const start = bot.entity.position.floored()
-
-  bot.chat('Giving wool...')
-  for (const w of WOOL_PALETTE) {
-    bot.chat(`/give ${BOT_NAME} minecraft:${w.block} 64`)
-  }
-
-  bot.chat('Placing blocks...')
-
-  for (let z = 0; z < MAP_SIZE; z++) {
-    for (let x = 0; x < MAP_SIZE; x++) {
-      const blockName = pixels[z][x]
-      const placePos = start.offset(x, -1, -z)
-      const ref = bot.blockAt(placePos.offset(0, -1, 0))
-      if (!ref) continue
-
-      const item = bot.registry.itemsByName[blockName]
-      if (!item) continue
-
-      await bot.equip(item.id, 'hand')
-      await bot.placeBlock(ref, new Vec3(0, 1, 0))
-    }
-  }
-}
-
-/* ================= BOT SETUP ================= */
+/* =============== BOT ================= */
 
 const bot = mineflayer.createBot({
-  host: aeroxolserver.aternos.me,
-  port: 19266,
+  host: SERVER_IP,
+  port: SERVER_PORT,
   username: BOT_NAME,
-  version: 1.21.1
+  version: MC_VERSION
 })
 
 bot.once('spawn', () => {
-  console.log('[INFO] Bot spawned')
-  bot.chat(`/gamemode creative ${BOT_NAME}`)
-  bot.chat('Map art bot ready. Use ?map <image_url>')
+  console.log('[INFO] helperbot online')
+  bot.chat('HelperBot online. Type ?help')
+
+  // spam message every 10 minutes
+  setInterval(() => {
+    bot.chat('If you want to see all commands type ?help')
+  }, 10 * 60 * 1000)
 })
 
-/* ============ CHAT LISTENER (FIXED) ============ */
-/* THIS IS WHY YOUR OLD VERSION DID NOTHING */
+/* =========== PLAYER TRACKING =========== */
 
-bot.on('messagestr', async (message) => {
-  console.log('[CHAT]', message)
+bot.on('playerJoined', (p) => {
+  lastSeen[p.username] = Date.now()
+})
 
-  if (!message.startsWith('?map ')) return
+bot.on('playerLeft', (p) => {
+  lastSeen[p.username] = Date.now()
+})
 
-  const url = message.split(' ')[1]
-  if (!url) {
-    bot.chat('Invalid map command.')
-    return
+/* ============== COMMANDS ============== */
+
+const commands = {
+  help: () => {
+    bot.chat('Commands (page 1/2):')
+    bot.chat('?help, ?seen <p>, ?ping, ?uptime, ?online, ?players, ?coords')
+    bot.chat('?time, ?date, ?version, ?botname, ?owner, ?rules, ?discord')
+    bot.chat('?website, ?motd, ?ip, ?server, ?faq, ?vote, ?store')
+    bot.chat('Type ?help2 for more')
+  },
+
+  help2: () => {
+    bot.chat('Commands (page 2/2):')
+    bot.chat('?day, ?night, ?tps, ?memory, ?cpu, ?ram, ?java')
+    bot.chat('?whoami, ?seenme, ?firstseen <p>, ?uptimebot')
+    bot.chat('?math <a+b>, ?echo <text>, ?random, ?roll')
+  },
+
+  seen: (args) => {
+    const p = args[0]
+    if (!p) return bot.chat('Usage: ?seen <player>')
+    if (!lastSeen[p]) return bot.chat(`I have never seen ${p}.`)
+    bot.chat(`${p} was last seen ${formatTime(Date.now() - lastSeen[p])} ago.`)
+  },
+
+  seenme: (args, user) => {
+    if (!lastSeen[user]) return bot.chat('I have never seen you before.')
+    bot.chat(`You were last seen ${formatTime(Date.now() - lastSeen[user])} ago.`)
+  },
+
+  firstseen: (args) => {
+    const p = args[0]
+    if (!p || !lastSeen[p]) return bot.chat('No data.')
+    bot.chat(`${p} was first recorded by me earlier.`)
+  },
+
+  ping: () => bot.chat('Pong!'),
+  uptime: () => bot.chat(`Uptime: ${formatTime(Date.now() - startTime)}`),
+  uptimebot: () => bot.chat(`Bot uptime: ${formatTime(Date.now() - startTime)}`),
+  online: () => bot.chat(`Online players: ${Object.keys(bot.players).length}`),
+  players: () => bot.chat(`Players: ${Object.keys(bot.players).join(', ') || 'none'}`),
+  coords: () => {
+    const p = bot.entity.position
+    bot.chat(`Coords: ${p.x.toFixed(1)} ${p.y.toFixed(1)} ${p.z.toFixed(1)}`)
+  },
+  time: () => bot.chat(`Server time: ${new Date().toLocaleTimeString()}`),
+  date: () => bot.chat(`Date: ${new Date().toLocaleDateString()}`),
+  version: () => bot.chat(`Minecraft version: ${MC_VERSION}`),
+  botname: () => bot.chat(`My name is ${BOT_NAME}`),
+  owner: () => bot.chat('Owner: alifthepro123'),
+  rules: () => bot.chat('Rules: No griefing, no cheating, be respectful'),
+  discord: () => bot.chat('Discord: discord.gg/example'),
+  website: () => bot.chat('Website: mraeroxol-boop.github.io'),
+  motd: () => bot.chat('Welcome to the server!'),
+  ip: () => bot.chat(`Server IP: ${SERVER_IP}`),
+  server: () => bot.chat('Java Edition server'),
+  faq: () => bot.chat('FAQ: Ask staff if unsure'),
+  vote: () => bot.chat('Vote link: example.com/vote'),
+  store: () => bot.chat('Store: example.com/store'),
+  day: () => bot.chat('Day length: 20 minutes'),
+  night: () => bot.chat('Night length: 7 minutes'),
+  tps: () => bot.chat('TPS: depends on server'),
+  memory: () => bot.chat(`Memory: ${(process.memoryUsage().rss / 1024 / 1024).toFixed(1)} MB`),
+  cpu: () => bot.chat('CPU usage: server side'),
+  ram: () => bot.chat(`RAM usage: ${(process.memoryUsage().heapUsed / 1024 / 1024).toFixed(1)} MB`),
+  java: () => bot.chat(`Node.js: ${process.version}`),
+  whoami: (args, user) => bot.chat(`You are ${user}`),
+  math: (args) => {
+    try {
+      const res = eval(args.join(''))
+      bot.chat(`Result: ${res}`)
+    } catch {
+      bot.chat('Invalid math.')
+    }
+  },
+  echo: (args) => bot.chat(args.join(' ') || 'Nothing to echo'),
+  random: () => bot.chat(`Random: ${Math.floor(Math.random() * 100)}`),
+  roll: () => bot.chat(`Dice roll: ${1 + Math.floor(Math.random() * 6)}`)
+}
+
+/* ============ CHAT HANDLER ============ */
+
+bot.on('messagestr', (message) => {
+  if (!message.startsWith(PREFIX)) return
+
+  const parts = message.slice(1).split(' ')
+  const cmd = parts.shift().toLowerCase()
+  const user = message.split(':')[0]
+
+  if (commands[cmd]) {
+    commands[cmd](parts, user)
   }
+})
 
-  try {
-    bot.chat('Processing image...')
-    const pixels = await imageToPixels(url)
-    bot.chat('Building 1x1 map art...')
-    await buildMap(bot, pixels)
-    bot.chat('Done. Give me a map and right-click.')
-  } catch (err) {
-    console.error('[ERROR]', err)
-    bot.chat('Failed to create map art.')
-  }
+/* ============ UTIL ============ */
+
+function formatTime(ms) {
+  const s = Math.floor(ms / 1000)
+  const m = Math.floor(s / 60)
+  const h = Math.floor(m / 60)
+  const d = Math.floor(h / 24)
+  if (d) return `${d}d ${h % 24}h`
+  if (h) return `${h}h ${m % 60}m`
+  if (m) return `${m}m ${s % 60}s`
+  return `${s}s`
+}
+
+/* ============ SAFETY ============ */
+
+bot.on('end', () => {
+  console.log('[WARN] Disconnected')
+})
+
+bot.on('error', (e) => {
+  console.log('[ERROR]', e.message)
 })
