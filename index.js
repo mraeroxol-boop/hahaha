@@ -3,7 +3,7 @@ const mineflayer = require('mineflayer')
 /* ================= CONFIG ================= */
 
 const BOT_NAME = 'helperbot'
-const SERVER_IP = '.aeroxolserver.aternos.me' // CHANGE THIS
+const SERVER_IP = 'aeroxolserver.aternos.me' // CHANGE THIS
 const SERVER_PORT = 19266
 const MC_VERSION = '1.21.1'
 const PREFIX = '?'
